@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visitor Information Panel</title>
+<style>
+:root{--primary-color:#1abc9c;--secondary-color:#ecf0f1;--background-dark:#2c3e50;--background-light:#34495e;--accent-color:#e67e22;--error-color:#e74c3c}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:var(--background-dark);margin:0;padding:20px;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;color:var(--secondary-color)}
+.info-container{background-color:var(--background-light);padding:30px 40px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.3);max-width:1000px;width:100%;border-top:4px solid var(--primary-color)}
+h1{color:var(--primary-color);font-size:2.2rem;margin-bottom:24px;text-align:center;font-weight:600}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:24px}
+.section{background-color:rgba(0,0,0,.1);padding:20px;border-radius:8px}
+.section-title{font-size:1.15rem;font-weight:600;margin:0 0 14px 0;padding-bottom:8px;border-bottom:2px solid var(--primary-color);color:var(--secondary-color)}
+p{margin:12px 0;font-size:.98rem;line-height:1.5;display:flex;justify-content:space-between;flex-wrap:wrap}
+p strong{color:var(--primary-color);font-weight:500;margin-right:10px;white-space:nowrap}
+p span{text-align:right;word-break:break-all;opacity:0;transition:opacity .5s ease-in-out}
+p span.loaded{opacity:1}
+.loading{color:var(--accent-color);animation:pulse 1.5s infinite ease-in-out}
+.error{color:var(--error-color);font-weight:bold}
+@keyframes pulse{0%{opacity:1}50%{opacity:.4}100%{opacity:1}}
+.latency-list{display:grid;grid-template-columns:1fr 110px;gap:8px 12px;align-items:center}
+.latency-name{color:var(--secondary-color);opacity:.9}
+.latency-value{text-align:right}
+@media (max-width:768px){body{padding:10px}.info-container{padding:20px}h1{font-size:1.8rem}.info-grid{grid-template-columns:1fr;gap:20px}}
+@media (max-width:480px){p{flex-direction:column;align-items:flex-start;margin:14px 0}p span{text-align:left;margin-top:4px;padding-left:8px;border-left:2px solid var(--primary-color)}.latency-list{grid-template-columns:1fr}.latency-value{text-align:left}}
+</style>
+<script src="v4.js"></script>
+</head>
+<body>
+<div class="info-container">
+  <h1>Welcome, Visitor</h1>
+  <div class="info-grid">
+    <div class="section">
+      <h2 class="section-title">Network Information</h2>
+      <p><strong>IPv4 Address</strong> <span id="ip4" class="loading">Loading...</span></p>
+      <p><strong>IPv6 Address</strong> <span id="ip6" class="loading">Loading...</span></p>
+      <p><strong>CN IPv4</strong> <span id="ip4cn" class="loading">Loading...</span></p>
+      <p><strong>CN IPv6</strong> <span id="ip6cn" class="loading">Loading...</span></p>
+      <p><strong>Dual-Stack Route Used</strong> <span id="connPriority" class="loading">Testing...</span></p>
+      <p><strong>IPv4 TTFB</strong> <span id="v4lat" class="loading">Measuring...</span></p>
+      <p><strong>IPv6 TTFB</strong> <span id="v6lat" class="loading">Measuring...</span></p>
+      <p><strong>WebRTC IP Leak</strong> <span id="webrtc" class="loading">Testing...</span></p>
+      <p><strong>Location</strong> <span id="location" class="loading">Loading...</span></p>
+      <p><strong>Timezone</strong> <span id="timezone" class="loading">Loading...</span></p>
+      <p><strong>ASN / ISP</strong> <span id="asn" class="loading">Loading...</span></p>
+      <p><strong>DNS Server IP</strong> <span id="dnsAddress" class="loading">Loading...</span></p>
+    </div>
+    <div class="section">
+      <h2 class="section-title">Identity</h2>
+      <p><strong>Fingerprint ID</strong> <span id="fingerprint" class="loading">Loading...</span></p>
+      <p><strong>Access Time</strong> <span id="time" class="loading">Loading...</span></p>
+    </div>
+    <div class="section" style="grid-column:1 / -1;">
+      <h2 class="section-title">HTTP Latency Tests (TTFB)</h2>
+      <div id="latencyList" class="latency-list"></div>
+    </div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const u=(i,c,e)=>{const el=document.getElementById(i);if(!el)return;el.innerHTML=c;el.classList.remove('loading');el.classList.add('loaded');if(e)el.classList.add('error')};
+  const err=(i,m='Failed to retrieve')=>u(i,m,true);
+  const now=()=>performance&&performance.now?performance.now():Date.now();
+  const ttfb=async(url,ms=8000)=>{const ac='AbortController'in window?new AbortController():null;const q=(url.includes('?')?'&':'?')+'_t='+(Date.now()+Math.random()).toString(36);const t0=now();let timer=null;try{if(ac)timer=setTimeout(()=>ac.abort(),ms);await fetch(url+q,{method:'GET',mode:'no-cors',cache:'no-store',redirect:'follow',referrerPolicy:'no-referrer',keepalive:false,signal:ac?ac.signal:undefined});return Math.max(0,Math.round(now()-t0))}catch(e){return null}finally{if(timer)clearTimeout(timer)}};
+  const addLatencyRow=(name,id)=>{const list=document.getElementById('latencyList');const n=document.createElement('div');n.className='latency-name';n.textContent=name;const v=document.createElement('div');v.className='latency-value loading';v.id=id;v.textContent='Measuring...';list.appendChild(n);list.appendChild(v)};
+  const setLatencyValue=(id,val)=>{const el=document.getElementById(id);if(!el)return;if(val===null){el.textContent='Timeout/Fail';el.classList.remove('loading');el.classList.add('loaded','error')}else{el.textContent=val+' ms';el.classList.remove('loading');el.classList.add('loaded')}};
+  const displayStatic=()=>{const n=new Date();const t=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')+' '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0');u('time',t)};
+  const webrtcLeak=()=>{const RTCP=window.RTCPeerConnection||window.webkitRTCPeerConnection||window.mozRTCPeerConnection;if(!RTCP){u('webrtc','API not supported');return}const pc=new RTCP({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});const ips=new Set();pc.onicecandidate=e=>{if(!e.candidate)return;const c=e.candidate;const ip=c.address||c.ip||(c.candidate?c.candidate.split(' ')[4]:null);if(ip)ips.add(ip)};try{pc.createDataChannel('x')}catch(e){}pc.createOffer().then(o=>pc.setLocalDescription(o)).catch(()=>{});setTimeout(()=>{if(ips.size)u('webrtc',Array.from(ips).join('<br>'));else u('webrtc','No leak detected or disabled');try{pc.close()}catch(e){}},1500)};
+  const getJSON=async(url)=>{try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;return await r.json()}catch(e){return null}};
+  const fetchText=async(url)=>{try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;const t=await r.text();return (t||'').trim()}catch(e){return null}};
+  const embedFrame=(id,src)=>{const el=document.getElementById(id);if(!el)return;el.classList.remove('loading');el.classList.add('loaded');el.innerHTML='';const f=document.createElement('iframe');f.src=src;f.setAttribute('frameborder','0');f.setAttribute('scrolling','no');f.style.border='0';f.style.width='210px';f.style.height='24px';f.style.background='transparent';el.appendChild(f)};
+  const geoAndDns=async()=>{try{const g=await getJSON('https://ipapi.co/json/');const loc=g&&(g.country_name||g.country)?[(g.country_name||g.country)||'',g.region||g.region_code||'',g.city||''].filter(Boolean).join(', '):'Unknown';const asn=g&&(g.asn||g.org)?((g.asn?g.asn+' ':'')+(g.org||'')).trim():'Unknown';u('location',loc||'Unknown');u('timezone',(g&&(g.timezone||g.utc_offset))?(g.timezone||g.utc_offset):'Unknown');u('asn',asn||'Unknown')}catch(e){try{const g=await getJSON('https://ipwho.is/');const loc=[g&&g.country||'',g&&g.region||g&&g.region_name||'',g&&g.city||''].filter(Boolean).join(', ')||'Unknown';const asn=((g&&g.connection&&g.connection.asn)?g.connection.asn:'')+' '+((g&&g.connection&&g.connection.isp)?g.connection.isp:'');u('location',loc.trim()||'Unknown');u('timezone',(g&&g.timezone&&g.timezone.id)?g.timezone.id:(g&&g.timezone||'Unknown'));u('asn',asn.trim()||'Unknown')}catch(e2){err('location');err('timezone');err('asn')}}try{const d=await getJSON('https://edns.ip-api.com/json');if(d&&d.dns&&d.dns.ip)u('dnsAddress',d.dns.ip);else err('dnsAddress')}catch(e){err('dnsAddress')}};
+  const v4v6Addresses=async()=>{let v4=null,v6=null;try{const j6=await getJSON('https://api6.ipify.org?format=json');if(j6&&j6.ip)v6=j6.ip}catch(e){}try{const a=await getJSON('https://ipwho.is/');if(a&&a.ip){if(a.ip.includes('.')&&!v4)v4=a.ip;if(a.ip.includes(':')&&!v6)v6=a.ip}}catch(e){}if(!v4||!v6){try{const b=await getJSON('https://ipapi.co/json/');if(b&&b.ip){if(b.ip.includes('.')&&!v4)v4=b.ip;if(b.ip.includes(':')&&!v6)v6=b.ip}}catch(e){}}if(v4)u('ip4',v4);else err('ip4','N/A or failed');if(v6)u('ip6',v6);else err('ip6','N/A or failed')};
+  const cnAddresses=async()=>{const v4=await fetchText('https://4.ipw.cn');if(v4)u('ip4cn',v4);else embedFrame('ip4cn','https://4.ipw.cn');const v6=await fetchText('https://6.ipw.cn');if(v6)u('ip6cn',v6);else embedFrame('ip6cn','https://6.ipw.cn')};
+  const dualStackPreference=async()=>{try{const t0=now();const ip=await fetchText('https://api.ip.sb/ip');if(ip){const used=ip.includes(':')?'IPv6':'IPv4';const ms=Math.max(0,Math.round(now()-t0));u('connPriority',used+' (used on dual-stack, '+ms+' ms)');return}throw new Error('no ip')}catch(e){let decided=false;const to=setTimeout(()=>{if(!decided){decided=true;u('connPriority','Inconclusive (timeout)',true)}},4000);fetch('https://1.1.1.1/',{mode:'no-cors',cache:'no-store'}).then(()=>{if(!decided){decided=true;clearTimeout(to);u('connPriority','IPv4 (fallback)')}}).catch(()=>{});fetch('https://[2606:4700:4700::1111]/',{mode:'no-cors',cache:'no-store'}).then(()=>{if(!decided){decided=true;clearTimeout(to);u('connPriority','IPv6 (fallback)')}}).catch(()=>{})}};
+  const v4v6TTFB=async()=>{const v4=await ttfb('https://4.ipw.cn',8000);const v6=await ttfb('https://6.ipw.cn',8000);setLatencyValue('v4lat',v4);setLatencyValue('v6lat',v6)};
+  const fingerprint=async()=>{try{const fp=await FingerprintJS.load();const r=await fp.get();u('fingerprint',r.visitorId)}catch(e){err('fingerprint')}};
+  const latencyTargets=[{name:'Google',url:'https://www.google.com/generate_204'},{name:'Cloudflare',url:'https://cp.cloudflare.com'},{name:'GitHub',url:'https://github.githubassets.com/assets/apple-touch-icon-144x144-b882e354c005.png'},{name:'Wikipedia',url:'https://www.wikipedia.org/robots.txt'},{name:'Twitter',url:'https://abs.twimg.com/favicons/twitter.ico'},{name:'Facebook',url:'https://static.xx.fbcdn.net/rsrc.php/y1/r/4lCu2zih0ca.svg'},{name:'Amazon',url:'https://www.amazon.com/robots.txt'},{name:'Microsoft',url:'https://uhf.microsoft.com/images/microsoft/RE1Mu3b.png'},{name:'Apple',url:'https://www.apple.com/robots.txt'},{name:'Reddit',url:'https://www.reddit.com/robots.txt'},{name:'Netflix',url:'https://www.netflix.com/robots.txt'},{name:'OpenAI',url:'https://openai.com/robots.txt'}];
+  const setupLatencyUI=()=>{latencyTargets.forEach((t,i)=>addLatencyRow(t.name,'lt-'+i))};
+  const runLatencyTests=async()=>{for(let i=0;i<latencyTargets.length;i++){const t=latencyTargets[i];const ms=await ttfb(t.url,8000);setLatencyValue('lt-'+i,ms)}};
+  displayStatic();
+  setupLatencyUI();
+  geoAndDns();
+  v4v6Addresses();
+  cnAddresses();
+  dualStackPreference();
+  v4v6TTFB();
+  webrtcLeak();
+  fingerprint();
+  runLatencyTests();
+});
+</script>
+</body>
+</html>
